@@ -881,18 +881,25 @@ bool EvalScript(vector<vector<unsigned char> >& stack, const CScript& script, co
                         break;
 
                     case OP_MUL:
-                        if (!BN_mul(&bn, &bn1, &bn2, pctx))
-                            return false;
+                        // replace BN_* calls that passed &CBigNum with calls using getBIGNUM()
+                        // before: if (!BN_mul(&bn, &bn1, &bn2, pctx))
+                        if (!BN_mul(bn.getBIGNUM(), bn1.getBIGNUM(), bn2.getBIGNUM(), pctx))
+                            throw bignum_error("EvalScript: BN_mul failed");
+
                         break;
 
                     case OP_DIV:
-                        if (!BN_div(&bn, NULL, &bn1, &bn2, pctx))
-                            return false;
+                        // before: if (!BN_div(&bn, NULL, &bn1, &bn2, pctx))
+                        if (!BN_div(bn.getBIGNUM(), NULL, bn1.getBIGNUM(), bn2.getBIGNUM(), pctx))
+                            throw bignum_error("EvalScript: BN_div failed");
+
                         break;
 
                     case OP_MOD:
-                        if (!BN_mod(&bn, &bn1, &bn2, pctx))
-                            return false;
+                        // before: if (!BN_mod(&bn, &bn1, &bn2, pctx))
+                        if (!BN_mod(bn.getBIGNUM(), bn1.getBIGNUM(), bn2.getBIGNUM(), pctx))
+                            throw bignum_error("EvalScript: BN_mod failed");
+
                         break;
 
                     case OP_LSHIFT:
@@ -904,7 +911,7 @@ bool EvalScript(vector<vector<unsigned char> >& stack, const CScript& script, co
                     case OP_RSHIFT:
                         if (bn2 < bnZero || bn2 > CBigNum(2048))
                             return false;
-                        bn = bn1 >> bn2.getulong();
+                        bn = bn1 >> static_cast<unsigned int>(bn2.getulong());
                         break;
 
                     case OP_BOOLAND:             bn = (bn1 != bnZero && bn2 != bnZero); break;

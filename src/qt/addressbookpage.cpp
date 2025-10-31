@@ -12,6 +12,7 @@
 #include <QClipboard>
 #include <QMessageBox>
 #include <QMenu>
+#include <QHeaderView> // <-- added for Qt5 API
 
 #ifdef USE_QRCODE
 #include "qrcodedialog.h"
@@ -134,8 +135,9 @@ void AddressBookPage::setModel(AddressTableModel *model)
     // Set column widths
     ui->tableView->horizontalHeader()->resizeSection(
             AddressTableModel::Address, 320);
-    ui->tableView->horizontalHeader()->setResizeMode(
-            AddressTableModel::Label, QHeaderView::Stretch);
+    // Qt5: setSectionResizeMode replaced setResizeMode
+    ui->tableView->horizontalHeader()->setSectionResizeMode(
+        AddressTableModel::Label, QHeaderView::Stretch);
 
     connect(ui->tableView->selectionModel(), SIGNAL(selectionChanged(QItemSelection,QItemSelection)),
             this, SLOT(selectionChanged()));

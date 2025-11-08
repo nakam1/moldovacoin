@@ -229,7 +229,7 @@ void StatisticsPage::updatePlot()
     vX3.resize(numLookBack);
     vY3.resize(numLookBack);
 
-    CBlockIndex* itr3 = pindex;
+    const CBlockIndex* itr3 = pindex;
 
     while(i >= 0 && itr3 != NULL)
     {
@@ -342,7 +342,7 @@ void StatisticsPage::updatePlot2()
     vX4.resize(numLookBack);
     vY4.resize(numLookBack);
 
-    CBlockIndex* itr4 = pindex;
+    const CBlockIndex* itr4 = pindex;
 
     while(i >= 0 && itr4 != NULL)
     {

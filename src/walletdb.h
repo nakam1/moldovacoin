@@ -256,7 +256,9 @@ public:
  	}
 
     bool ReadAccount(const std::string& strAccount, CAccount& account);
-    bool WriteAccount(const std::string& strAccount, const CAccount& account);
+    // Account API
+    // Keep the legacy string-based API to match src/walletdb.cpp implementation
+    bool WriteAccount(const std::string& strAccount, const std::string& strName);
 private:
     bool WriteAccountingEntry(const uint64_t nAccEntryNum, const CAccountingEntry& acentry);
 public:

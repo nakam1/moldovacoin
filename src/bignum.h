@@ -11,12 +11,30 @@
 #include <string>
 #include <stdint.h>
 #include <algorithm>
-#include <stdexcept>          // <-- added
+#include <stdexcept>
 #include <openssl/bn.h>
 #include <openssl/crypto.h>
 #include "serialize.h"
 
 class uint256; // forward
+
+// Small exception type used by older code
+class bignum_error : public std::runtime_error {
+public:
+    explicit bignum_error(const std::string& msg) : std::runtime_error(msg) {}
+};
+
+// RAII helper for BN_CTX used by older code
+class CAutoBN_CTX
+{
+private:
+    BN_CTX* pctx;
+public:
+    CAutoBN_CTX() : pctx(BN_CTX_new()) {}
+    ~CAutoBN_CTX() { if (pctx) BN_CTX_free(pctx); }
+    operator BN_CTX*() const { return pctx; }
+    BN_CTX* operator->() const { return pctx; }
+};
 
 class CBigNum
 {
@@ -36,7 +54,10 @@ private:
     }
 
 public:
-    // (removed duplicate forward-declarations; definitions appear later)
+    // forward-declare helpers used by templates/constructors
+    void setvch(const std::vector<unsigned char>& vch);
+    std::vector<unsigned char> getvch() const;
+
     CBigNum() : bn(BN_new()) {}
     CBigNum(const CBigNum& b) : bn(BN_new())
     {
@@ -75,14 +96,14 @@ public:
     void Serialize(Stream& s, int nType, int nVersion) const
     {
         std::vector<unsigned char> vch = getvch();
-        ::Serialize(s, vch, nType, nVersion); // ensure global Serialize is called
+        ::Serialize(s, vch, nType, nVersion);
     }
 
     template <typename Stream>
     void Unserialize(Stream& s, int nType, int nVersion)
     {
         std::vector<unsigned char> vch;
-        ::Unserialize(s, vch, nType, nVersion); // ensure global Unserialize is called
+        ::Unserialize(s, vch, nType, nVersion);
         setvch(vch);
     }
 
@@ -112,7 +133,6 @@ public:
         unsigned char pch[8];
         uint64_t un = (n < 0) ? -uint64_t(n) : uint64_t(n);
         for (int i = 0; i < 8; ++i) pch[7 - i] = (unsigned char)(un >> (8*i));
-        // strip leading zeros
         const unsigned char* p = pch;
         int len = 0;
         while (len < 8 && *p == 0) { ++p; ++len; }
@@ -145,7 +165,6 @@ public:
     uint256 getuint256() const;
 
     // Compact format (as used in nBits) helpers
-    // SetCompact returns *this to allow expressions like CBigNum().SetCompact(nBits)
     CBigNum& SetCompact(unsigned int nCompact)
     {
         unsigned int nSize = nCompact >> 24;
@@ -154,7 +173,6 @@ public:
 
         std::vector<unsigned char> vch;
         if (nSize <= 3) {
-            // nWord >> 8*(3-nSize)
             nWord >>= 8 * (3 - nSize);
             for (int i = 0; i < 3 && (nWord > 0); ++i) {
                 vch.insert(vch.begin(), (unsigned char)(nWord & 0xff));
@@ -177,7 +195,6 @@ public:
     unsigned int GetCompact() const
     {
         if (!bn) return 0;
-        // produce compact representation: size + top 3 bytes as mantissa
         int nSize = BN_num_bytes(bn);
         std::vector<unsigned char> vch(nSize);
         if (nSize > 0) BN_bn2bin(bn, vch.data());
@@ -194,7 +211,7 @@ public:
         return nCompact;
     }
 
-    // divide by small integer (used by code expecting bn /= value)
+    // divide by small integer
     CBigNum& operator/=(long v)
     {
         if (!bn) { bn = BN_new(); BN_zero(bn); return *this; }
@@ -206,13 +223,12 @@ public:
             BN_free(bv); BN_free(rem);
             throw bignum_error("BN_div failed");
         }
-        // sign handling
         if (v < 0) BN_set_negative(bn, !BN_is_negative(bn));
         BN_free(bv); BN_free(rem);
         return *this;
     }
 
-    // arithmetic wrappers (use BN_* functions)
+    // arithmetic wrappers
     friend CBigNum operator+(const CBigNum& a, const CBigNum& b)
     {
         CBigNum r;
@@ -341,20 +357,11 @@ public:
 inline CBigNum operator<<(const CBigNum& a, unsigned int shift)
 {
     CBigNum r(a);
-    if (r.getBIGNUM()) BN_lshift(r.getBIGNUM(), r.getBIGNUM(), shift);
+    if (!r.getBIGNUM()) r.getBIGNUM() = BN_new();
+    BN_lshift(r.getBIGNUM(), r.getBIGNUM(), shift);
     return r;
 }
 
-// Treat '|' with small integer operand as add (used in base58 byte-append: (bn<<8)|byte)
-inline CBigNum operator|(const CBigNum& a, unsigned long w)
-{
-    CBigNum r(a);
-    if (!r.getBIGNUM()) r.getBIGNUM() = BN_new(); // ensure allocated (rare)
-    if (!BN_add_word(r.getBIGNUM(), w)) BN_zero(r.getBIGNUM());
-    return r;
-}
-
-// Right-shift operator
 inline CBigNum operator>>(const CBigNum& a, unsigned int shift)
 {
     CBigNum r(a);
@@ -362,33 +369,21 @@ inline CBigNum operator>>(const CBigNum& a, unsigned int shift)
     return r;
 }
 
-// Unary minus (negation)
+inline CBigNum operator|(const CBigNum& a, unsigned long w)
+{
+    CBigNum r(a);
+    if (!r.getBIGNUM()) r.getBIGNUM() = BN_new();
+    if (!BN_add_word(r.getBIGNUM(), w)) BN_zero(r.getBIGNUM());
+    return r;
+}
+
 inline CBigNum operator-(const CBigNum& a)
 {
     CBigNum r(a);
     if (!r.getBIGNUM()) r.getBIGNUM() = BN_new();
-    // flip sign
     BN_set_negative(r.getBIGNUM(), !BN_is_negative(a.getBIGNUM()));
     return r;
 }
-
-// Add a small exception type used by older code (e.g. base58.h)
-class bignum_error : public std::runtime_error {
-public:
-    explicit bignum_error(const std::string& msg) : std::runtime_error(msg) {}
-};
-
-// RAII helper for BN_CTX used by older code (CAutoBN_CTX)
-class CAutoBN_CTX
-{
-private:
-    BN_CTX* pctx;
-public:
-    CAutoBN_CTX() : pctx(BN_CTX_new()) {}
-    ~CAutoBN_CTX() { if (pctx) BN_CTX_free(pctx); }
-    operator BN_CTX*() const { return pctx; }
-    BN_CTX* operator->() const { return pctx; }
-};
 
 // comparisons using BN_cmp
 inline bool operator==(const CBigNum& a, const CBigNum& b) { return BN_cmp(a.getBIGNUM(), b.getBIGNUM()) == 0; }

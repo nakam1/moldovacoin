@@ -1279,7 +1279,7 @@ protected:
   virtual void deselectEvent(bool *selectionStateChanged);
   
   // non-virtual methods:
-  void visibleTickBounds(int &lowIndex, int &highIndex) const;
+  visibleTickBounds(int &lowIndex, int &highIndex) const;
   double baseLog(double value) const;
   double basePow(double value) const;
   QPen getBasePen() const;
@@ -2144,7 +2144,7 @@ class QCP_LIB_DECL QCPLegend : public QCPLayoutGrid
   Q_PROPERTY(QColor textColor READ textColor WRITE setTextColor)
   Q_PROPERTY(QSize iconSize READ iconSize WRITE setIconSize)
   Q_PROPERTY(int iconTextPadding READ iconTextPadding WRITE setIconTextPadding)
-  Q_PROPERTY(QPen iconBorderPen READ iconBorderPen WRITE setIconBorderPen)
+  Q_PROPERTY(QPen iconBorderPen READ iconBorderPen WRITE setSelectedIconBorderPen)
   Q_PROPERTY(SelectableParts selectableParts READ selectableParts WRITE setSelectableParts NOTIFY selectionChanged)
   Q_PROPERTY(SelectableParts selectedParts READ selectedParts WRITE setSelectedParts NOTIFY selectableChanged)
   Q_PROPERTY(QPen selectedBorderPen READ selectedBorderPen WRITE setSelectedBorderPen)
@@ -2254,8 +2254,6 @@ private:
   friend class QCustomPlot;
   friend class QCPAbstractLegendItem;
 };
-Q_DECLARE_OPERATORS_FOR_FLAGS(QCPLegend::SelectableParts)
-Q_DECLARE_METATYPE(QCPLegend::SelectablePart)
 
 
 class QCP_LIB_DECL QCPPlotTitle : public QCPLayoutElement
@@ -2321,13 +2319,12 @@ protected:
   // non-virtual methods:
   QFont mainFont() const;
   QColor mainTextColor() const;
-  
-private:
-  Q_DISABLE_COPY(QCPPlotTitle)
+  QPen mainPen() const;
+  QBrush mainBrush() const;
 };
 
 
-class QCPColorScaleAxisRectPrivate : public QCPAxisRect
+class QCP_LIB_DECL QCPColorScaleAxisRectPrivate : public QCPAxisRect
 {
   Q_OBJECT
 public:
@@ -2373,576 +2370,13 @@ public:
   QCPAxis::AxisType type() const { return mType; }
   QCPRange dataRange() const { return mDataRange; }
   QCPAxis::ScaleType dataScaleType() const { return mDataScaleType; }
-  QCPColorGradient gradient() const { return mGradient; }
-  QString label() const;
-  int barWidth () const { return mBarWidth; }
-  bool rangeDrag() const;
-  bool rangeZoom() const;
-  
-  // setters:
-  void setType(QCPAxis::AxisType type);
-  Q_SLOT void setDataRange(const QCPRange &dataRange);
-  Q_SLOT void setDataScaleType(QCPAxis::ScaleType scaleType);
-  Q_SLOT void setGradient(const QCPColorGradient &gradient);
-  void setLabel(const QString &str);
-  void setBarWidth(int width);
-  void setRangeDrag(bool enabled);
-  void setRangeZoom(bool enabled);
-  
-  // non-property methods:
-  QList<QCPColorMap*> colorMaps() const;
-  void rescaleDataRange(bool onlyVisibleMaps);
-  
-  // reimplemented virtual methods:
-  virtual void update(UpdatePhase phase);
-  
-signals:
-  void dataRangeChanged(QCPRange newRange);
-  void dataScaleTypeChanged(QCPAxis::ScaleType scaleType);
-  void gradientChanged(QCPColorGradient newGradient);
-
-protected:
-  // property members:
-  QCPAxis::AxisType mType;
-  QCPRange mDataRange;
-  QCPAxis::ScaleType mDataScaleType;
-  QCPColorGradient mGradient;
-  int mBarWidth;
-  
-  // non-property members:
-  QPointer<QCPColorScaleAxisRectPrivate> mAxisRect;
-  QPointer<QCPAxis> mColorAxis;
-  
-  // reimplemented virtual methods:
-  virtual void applyDefaultAntialiasingHint(QCPPainter *painter) const;
-  // events:
-  virtual void mousePressEvent(QMouseEvent *event);
-  virtual void mouseMoveEvent(QMouseEvent *event);
-  virtual void mouseReleaseEvent(QMouseEvent *event);
-  virtual void wheelEvent(QWheelEvent *event);
-  
-private:
-  Q_DISABLE_COPY(QCPColorScale)
-  
-  friend class QCPColorScaleAxisRectPrivate;
-};
-
-
-/*! \file */
-
-
-
-class QCP_LIB_DECL QCPData
-{
-public:
-  QCPData();
-  QCPData(double key, double value);
-  double key, value;
-  double keyErrorPlus, keyErrorMinus;
-  double valueErrorPlus, valueErrorMinus;
-};
-Q_DECLARE_TYPEINFO(QCPData, Q_MOVABLE_TYPE);
-
-/*! \typedef QCPDataMap
-  Container for storing QCPData items in a sorted fashion. The key of the map
-  is the key member of the QCPData instance.
-  
-  This is the container in which QCPGraph holds its data.
-  \see QCPData, QCPGraph::setData
-*/
-typedef QMap<double, QCPData> QCPDataMap;
-typedef QMapIterator<double, QCPData> QCPDataMapIterator;
-typedef QMutableMapIterator<double, QCPData> QCPDataMutableMapIterator;
-
-
-class QCP_LIB_DECL QCPGraph : public QCPAbstractPlottable
-{
-  Q_OBJECT
-  /// \cond INCLUDE_QPROPERTIES
-  Q_PROPERTY(LineStyle lineStyle READ lineStyle WRITE setLineStyle)
-  Q_PROPERTY(QCPScatterStyle scatterStyle READ scatterStyle WRITE setScatterStyle)
-  Q_PROPERTY(ErrorType errorType READ errorType WRITE setErrorType)
-  Q_PROPERTY(QPen errorPen READ errorPen WRITE setErrorPen)
-  Q_PROPERTY(double errorBarSize READ errorBarSize WRITE setErrorBarSize)
-  Q_PROPERTY(bool errorBarSkipSymbol READ errorBarSkipSymbol WRITE setErrorBarSkipSymbol)
-  Q_PROPERTY(QCPGraph* channelFillGraph READ channelFillGraph WRITE setChannelFillGraph)
-  Q_PROPERTY(bool adaptiveSampling READ adaptiveSampling WRITE setAdaptiveSampling)
-  /// \endcond
-public:
-  /*!
-    Defines how the graph's line is represented visually in the plot. The line is drawn with the
-    current pen of the graph (\ref setPen).
-    \see setLineStyle
-  */
-  enum LineStyle { lsNone        ///< data points are not connected with any lines (e.g. data only represented
-                                 ///< with symbols according to the scatter style, see \ref setScatterStyle)
-                   ,lsLine       ///< data points are connected by a straight line
-                   ,lsStepLeft   ///< line is drawn as steps where the step height is the value of the left data point
-                   ,lsStepRight  ///< line is drawn as steps where the step height is the value of the right data point
-                   ,lsStepCenter ///< line is drawn as steps where the step is in between two data points
-                   ,lsImpulse    ///< each data point is represented by a line parallel to the value axis, which reaches from the data point to the zero-value-line
-                 };
-  Q_ENUMS(LineStyle)
-  /*!
-    Defines what kind of error bars are drawn for each data point
-  */
-  enum ErrorType { etNone   ///< No error bars are shown
-                   ,etKey   ///< Error bars for the key dimension of the data point are shown
-                   ,etValue ///< Error bars for the value dimension of the data point are shown
-                   ,etBoth  ///< Error bars for both key and value dimensions of the data point are shown
-                 };
-  Q_ENUMS(ErrorType)
-  
-  explicit QCPGraph(QCPAxis *keyAxis, QCPAxis *valueAxis);
-  virtual ~QCPGraph();
-  
-  // getters:
-  QCPDataMap *data() const { return mData; }
-  LineStyle lineStyle() const { return mLineStyle; }
-  QCPScatterStyle scatterStyle() const { return mScatterStyle; }
-  ErrorType errorType() const { return mErrorType; }
-  QPen errorPen() const { return mErrorPen; }
-  double errorBarSize() const { return mErrorBarSize; }
-  bool errorBarSkipSymbol() const { return mErrorBarSkipSymbol; }
-  QCPGraph *channelFillGraph() const { return mChannelFillGraph.data(); }
-  bool adaptiveSampling() const { return mAdaptiveSampling; }
-  
-  // setters:
-  void setData(QCPDataMap *data, bool copy=false);
-  void setData(const QVector<double> &key, const QVector<double> &value);
-  void setDataKeyError(const QVector<double> &key, const QVector<double> &value, const QVector<double> &keyError);
-  void setDataKeyError(const QVector<double> &key, const QVector<double> &value, const QVector<double> &keyErrorMinus, const QVector<double> &keyErrorPlus);
-  void setDataValueError(const QVector<double> &key, const QVector<double> &value, const QVector<double> &valueError);
-  void setDataValueError(const QVector<double> &key, const QVector<double> &value, const QVector<double> &valueErrorMinus, const QVector<double> &valueErrorPlus);
-  void setDataBothError(const QVector<double> &key, const QVector<double> &value, const QVector<double> &keyError, const QVector<double> &valueError);
-  void setDataBothError(const QVector<double> &key, const QVector<double> &value, const QVector<double> &keyErrorMinus, const QVector<double> &keyErrorPlus, const QVector<double> &valueErrorMinus, const QVector<double> &valueErrorPlus);
-  void setLineStyle(LineStyle ls);
-  void setScatterStyle(const QCPScatterStyle &style);
-  void setErrorType(ErrorType errorType);
-  void setErrorPen(const QPen &pen);
-  void setErrorBarSize(double size);
-  void setErrorBarSkipSymbol(bool enabled);
-  void setChannelFillGraph(QCPGraph *targetGraph);
-  void setAdaptiveSampling(bool enabled);
-  
-  // non-property methods:
-  void addData(const QCPDataMap &dataMap);
-  void addData(const QCPData &data);
-  void addData(double key, double value);
-  void addData(const QVector<double> &keys, const QVector<double> &values);
-  void removeDataBefore(double key);
-  void removeDataAfter(double key);
-  void removeData(double fromKey, double toKey);
-  void removeData(double key);
-  
-  // reimplemented virtual methods:
-  virtual void clearData();
-  virtual double selectTest(const QPointF &pos, bool onlySelectable, QVariant *details=0) const;
-  using QCPAbstractPlottable::rescaleAxes;
-  using QCPAbstractPlottable::rescaleKeyAxis;
-  using QCPAbstractPlottable::rescaleValueAxis;
-  void rescaleAxes(bool onlyEnlarge, bool includeErrorBars) const; // overloads base class interface
-  void rescaleKeyAxis(bool onlyEnlarge, bool includeErrorBars) const; // overloads base class interface
-  void rescaleValueAxis(bool onlyEnlarge, bool includeErrorBars) const; // overloads base class interface
-  
-protected:
-  // property members:
-  QCPDataMap *mData;
-  QPen mErrorPen;
-  LineStyle mLineStyle;
-  QCPScatterStyle mScatterStyle;
-  ErrorType mErrorType;
-  double mErrorBarSize;
-  bool mErrorBarSkipSymbol;
-  QPointer<QCPGraph> mChannelFillGraph;
-  bool mAdaptiveSampling;
-  
-  // reimplemented virtual methods:
-  virtual void draw(QCPPainter *painter);
-  virtual void drawLegendIcon(QCPPainter *painter, const QRectF &rect) const;
-  virtual QCPRange getKeyRange(bool &foundRange, SignDomain inSignDomain=sdBoth) const;
-  virtual QCPRange getValueRange(bool &foundRange, SignDomain inSignDomain=sdBoth) const;
-  virtual QCPRange getKeyRange(bool &foundRange, SignDomain inSignDomain, bool includeErrors) const; // overloads base class interface
-  virtual QCPRange getValueRange(bool &foundRange, SignDomain inSignDomain, bool includeErrors) const; // overloads base class interface
-  
-  // introduced virtual methods:
-  virtual void drawFill(QCPPainter *painter, QVector<QPointF> *lineData) const;
-  virtual void drawScatterPlot(QCPPainter *painter, QVector<QCPData> *scatterData) const;
-  virtual void drawLinePlot(QCPPainter *painter, QVector<QPointF> *lineData) const;
-  virtual void drawImpulsePlot(QCPPainter *painter, QVector<QPointF> *lineData) const;
-  
-  // non-virtual methods:
-  void getPreparedData(QVector<QCPData> *lineData, QVector<QCPData> *scatterData) const;
-  void getPlotData(QVector<QPointF> *lineData, QVector<QCPData> *scatterData) const;
-  void getScatterPlotData(QVector<QCPData> *scatterData) const;
-  void getLinePlotData(QVector<QPointF> *linePixelData, QVector<QCPData> *scatterData) const;
-  void getStepLeftPlotData(QVector<QPointF> *linePixelData, QVector<QCPData> *scatterData) const;
-  void getStepRightPlotData(QVector<QPointF> *linePixelData, QVector<QCPData> *scatterData) const;
-  void getStepCenterPlotData(QVector<QPointF> *linePixelData, QVector<QCPData> *scatterData) const;
-  void getImpulsePlotData(QVector<QPointF> *linePixelData, QVector<QCPData> *scatterData) const;
-  void drawError(QCPPainter *painter, double x, double y, const QCPData &data) const;
-  void getVisibleDataBounds(QCPDataMap::const_iterator &lower, QCPDataMap::const_iterator &upper) const;
-  int countDataInBounds(const QCPDataMap::const_iterator &lower, const QCPDataMap::const_iterator &upper, int maxCount) const;
-  void addFillBasePoints(QVector<QPointF> *lineData) const;
-  void removeFillBasePoints(QVector<QPointF> *lineData) const;
-  QPointF lowerFillBasePoint(double lowerKey) const;
-  QPointF upperFillBasePoint(double upperKey) const;
-  const QPolygonF getChannelFillPolygon(const QVector<QPointF> *lineData) const;
-  int findIndexBelowX(const QVector<QPointF> *data, double x) const;
-  int findIndexAboveX(const QVector<QPointF> *data, double x) const;
-  int findIndexBelowY(const QVector<QPointF> *data, double y) const;
-  int findIndexAboveY(const QVector<QPointF> *data, double y) const;
-  double pointDistance(const QPointF &pixelPoint) const;
-  
-  friend class QCustomPlot;
-  friend class QCPLegend;
-};
-
-
-/*! \file */
-
-
-
-class QCP_LIB_DECL QCPCurveData
-{
-public:
-  QCPCurveData();
-  QCPCurveData(double t, double key, double value);
-  double t, key, value;
-};
-Q_DECLARE_TYPEINFO(QCPCurveData, Q_MOVABLE_TYPE);
-
-/*! \typedef QCPCurveDataMap
-  Container for storing QCPCurveData items in a sorted fashion. The key of the map
-  is the t member of the QCPCurveData instance.
-  
-  This is the container in which QCPCurve holds its data.
-  \see QCPCurveData, QCPCurve::setData
-*/
-
-typedef QMap<double, QCPCurveData> QCPCurveDataMap;
-typedef QMapIterator<double, QCPCurveData> QCPCurveDataMapIterator;
-typedef QMutableMapIterator<double, QCPCurveData> QCPCurveDataMutableMapIterator;
-
-
-class QCP_LIB_DECL QCPCurve : public QCPAbstractPlottable
-{
-  Q_OBJECT
-  /// \cond INCLUDE_QPROPERTIES
-  Q_PROPERTY(QCPScatterStyle scatterStyle READ scatterStyle WRITE setScatterStyle)
-  Q_PROPERTY(LineStyle lineStyle READ lineStyle WRITE setLineStyle)
-  /// \endcond
-public:
-  /*!
-    Defines how the curve's line is represented visually in the plot. The line is drawn with the
-    current pen of the curve (\ref setPen).
-    \see setLineStyle
-  */
-  enum LineStyle { lsNone  ///< No line is drawn between data points (e.g. only scatters)
-                   ,lsLine ///< Data points are connected with a straight line
-                 };
-  explicit QCPCurve(QCPAxis *keyAxis, QCPAxis *valueAxis);
-  virtual ~QCPCurve();
-  
-  // getters:
-  QCPCurveDataMap *data() const { return mData; }
-  QCPScatterStyle scatterStyle() const { return mScatterStyle; }
-  LineStyle lineStyle() const { return mLineStyle; }
-  
-  // setters:
-  void setData(QCPCurveDataMap *data, bool copy=false);
-  void setData(const QVector<double> &t, const QVector<double> &key, const QVector<double> &value);
-  void setData(const QVector<double> &key, const QVector<double> &value);
-  void setScatterStyle(const QCPScatterStyle &style);
-  void setLineStyle(LineStyle style);
-  
-  // non-property methods:
-  void addData(const QCPCurveDataMap &dataMap);
-  void addData(const QCPCurveData &data);
-  void addData(double t, double key, double value);
-  void addData(double key, double value);
-  void addData(const QVector<double> &ts, const QVector<double> &keys, const QVector<double> &values);
-  void removeDataBefore(double t);
-  void removeDataAfter(double t);
-  void removeData(double fromt, double tot);
-  void removeData(double t);
-  
-  // reimplemented virtual methods:
-  virtual void clearData();
-  virtual double selectTest(const QPointF &pos, bool onlySelectable, QVariant *details=0) const;
-  
-protected:
-  // property members:
-  QCPCurveDataMap *mData;
-  QCPScatterStyle mScatterStyle;
-  LineStyle mLineStyle;
-  
-  // reimplemented virtual methods:
-  virtual void draw(QCPPainter *painter);
-  virtual void drawLegendIcon(QCPPainter *painter, const QRectF &rect) const;
-  virtual QCPRange getKeyRange(bool &foundRange, SignDomain inSignDomain=sdBoth) const;
-  virtual QCPRange getValueRange(bool &foundRange, SignDomain inSignDomain=sdBoth) const;
-  
-  // introduced virtual methods:
-  virtual void drawScatterPlot(QCPPainter *painter, const QVector<QPointF> *pointData) const;
-  
-  // non-virtual methods:
-  void getCurveData(QVector<QPointF> *lineData) const;
-  double pointDistance(const QPointF &pixelPoint) const;
-  QPointF outsideCoordsToPixels(double key, double value, int region, QRect axisRect) const;
-  
-  friend class QCustomPlot;
-  friend class QCPLegend;
-};
-
-
-/*! \file */
-
-
-
-class QCP_LIB_DECL QCPBarData
-{
-public:
-  QCPBarData();
-  QCPBarData(double key, double value);
-  double key, value;
-};
-Q_DECLARE_TYPEINFO(QCPBarData, Q_MOVABLE_TYPE);
-
-/*! \typedef QCPBarDataMap
-  Container for storing QCPBarData items in a sorted fashion. The key of the map
-  is the key member of the QCPBarData instance.
-  
-  This is the container in which QCPBars holds its data.
-  \see QCPBarData, QCPBars::setData
-*/
-typedef QMap<double, QCPBarData> QCPBarDataMap;
-typedef QMapIterator<double, QCPBarData> QCPBarDataMapIterator;
-typedef QMutableMapIterator<double, QCPBarData> QCPBarDataMutableMapIterator;
-
-
-class QCP_LIB_DECL QCPBars : public QCPAbstractPlottable
-{
-  Q_OBJECT
-  /// \cond INCLUDE_QPROPERTIES
-  Q_PROPERTY(double width READ width WRITE setWidth)
-  Q_PROPERTY(QCPBars* barBelow READ barBelow)
-  Q_PROPERTY(QCPBars* barAbove READ barAbove)
-  /// \endcond
-public:
-  explicit QCPBars(QCPAxis *keyAxis, QCPAxis *valueAxis);
-  virtual ~QCPBars();
-  
-  // getters:
-  double width() const { return mWidth; }
-  QCPBars *barBelow() const { return mBarBelow.data(); }
-  QCPBars *barAbove() const { return mBarAbove.data(); }
-  QCPBarDataMap *data() const { return mData; }
-  
-  // setters:
-  void setWidth(double width);
-  void setData(QCPBarDataMap *data, bool copy=false);
-  void setData(const QVector<double> &key, const QVector<double> &value);
-  
-  // non-property methods:
-  void moveBelow(QCPBars *bars);
-  void moveAbove(QCPBars *bars);
-  void addData(const QCPBarDataMap &dataMap);
-  void addData(const QCPBarData &data);
-  void addData(double key, double value);
-  void addData(const QVector<double> &keys, const QVector<double> &values);
-  void removeDataBefore(double key);
-  void removeDataAfter(double key);
-  void removeData(double fromKey, double toKey);
-  void removeData(double key);
-  
-  // reimplemented virtual methods:
-  virtual void clearData();
-  virtual double selectTest(const QPointF &pos, bool onlySelectable, QVariant *details=0) const;
-  
-protected:
-  // property members:
-  QCPBarDataMap *mData;
-  double mWidth;
-  QPointer<QCPBars> mBarBelow, mBarAbove;
-  
-  // reimplemented virtual methods:
-  virtual void draw(QCPPainter *painter);
-  virtual void drawLegendIcon(QCPPainter *painter, const QRectF &rect) const;
-  virtual QCPRange getKeyRange(bool &foundRange, SignDomain inSignDomain=sdBoth) const;
-  virtual QCPRange getValueRange(bool &foundRange, SignDomain inSignDomain=sdBoth) const;
-  
-  // non-virtual methods:
-  QPolygonF getBarPolygon(double key, double value) const;
-  double getBaseValue(double key, bool positive) const;
-  static void connectBars(QCPBars* lower, QCPBars* upper);
-  
-  friend class QCustomPlot;
-  friend class QCPLegend;
-};
-
-
-/*! \file */
-
-
-
-class QCP_LIB_DECL QCPStatisticalBox : public QCPAbstractPlottable
-{
-  Q_OBJECT
-  /// \cond INCLUDE_QPROPERTIES
-  Q_PROPERTY(double key READ key WRITE setKey)
-  Q_PROPERTY(double minimum READ minimum WRITE setMinimum)
-  Q_PROPERTY(double lowerQuartile READ lowerQuartile WRITE setLowerQuartile)
-  Q_PROPERTY(double median READ median WRITE setMedian)
-  Q_PROPERTY(double upperQuartile READ upperQuartile WRITE setUpperQuartile)
-  Q_PROPERTY(double maximum READ maximum WRITE setMaximum)
-  Q_PROPERTY(QVector<double> outliers READ outliers WRITE setOutliers)
-  Q_PROPERTY(double width READ width WRITE setWidth)
-  Q_PROPERTY(double whiskerWidth READ whiskerWidth WRITE setWhiskerWidth)
-  Q_PROPERTY(QPen whiskerPen READ whiskerPen WRITE setWhiskerPen)
-  Q_PROPERTY(QPen whiskerBarPen READ whiskerBarPen WRITE setWhiskerBarPen)
-  Q_PROPERTY(QPen medianPen READ medianPen WRITE setMedianPen)
-  Q_PROPERTY(QCPScatterStyle outlierStyle READ outlierStyle WRITE setOutlierStyle)
-  /// \endcond
-public:
-  explicit QCPStatisticalBox(QCPAxis *keyAxis, QCPAxis *valueAxis);
-  
-  // getters:
-  double key() const { return mKey; }
-  double minimum() const { return mMinimum; }
-  double lowerQuartile() const { return mLowerQuartile; }
-  double median() const { return mMedian; }
-  double upperQuartile() const { return mUpperQuartile; }
-  double maximum() const { return mMaximum; }
-  QVector<double> outliers() const { return mOutliers; }
-  double width() const { return mWidth; }
-  double whiskerWidth() const { return mWhiskerWidth; }
-  QPen whiskerPen() const { return mWhiskerPen; }
-  QPen whiskerBarPen() const { return mWhiskerBarPen; }
-  QPen medianPen() const { return mMedianPen; }
-  QCPScatterStyle outlierStyle() const { return mOutlierStyle; }
-
-  // setters:
-  void setKey(double key);
-  void setMinimum(double value);
-  void setLowerQuartile(double value);
-  void setMedian(double value);
-  void setUpperQuartile(double value);
-  void setMaximum(double value);
-  void setOutliers(const QVector<double> &values);
-  void setData(double key, double minimum, double lowerQuartile, double median, double upperQuartile, double maximum);
-  void setWidth(double width);
-  void setWhiskerWidth(double width);
-  void setWhiskerPen(const QPen &pen);
-  void setWhiskerBarPen(const QPen &pen);
-  void setMedianPen(const QPen &pen);
-  void setOutlierStyle(const QCPScatterStyle &style);
-  
-  // non-property methods:
-  virtual void clearData();
-  virtual double selectTest(const QPointF &pos, bool onlySelectable, QVariant *details=0) const;
-  
-protected:
-  // property members:
-  QVector<double> mOutliers;
-  double mKey, mMinimum, mLowerQuartile, mMedian, mUpperQuartile, mMaximum;
-  double mWidth;
-  double mWhiskerWidth;
-  QPen mWhiskerPen, mWhiskerBarPen, mMedianPen;
-  QCPScatterStyle mOutlierStyle;
-  
-  // reimplemented virtual methods:
-  virtual void draw(QCPPainter *painter);
-  virtual void drawLegendIcon(QCPPainter *painter, const QRectF &rect) const;
-  virtual QCPRange getKeyRange(bool &foundRange, SignDomain inSignDomain=sdBoth) const;
-  virtual QCPRange getValueRange(bool &foundRange, SignDomain inSignDomain=sdBoth) const;
-  
-  // introduced virtual methods:
-  virtual void drawQuartileBox(QCPPainter *painter, QRectF *quartileBox=0) const;
-  virtual void drawMedian(QCPPainter *painter) const;
-  virtual void drawWhiskers(QCPPainter *painter) const;
-  virtual void drawOutliers(QCPPainter *painter) const;
-  
-  friend class QCustomPlot;
-  friend class QCPLegend;
-};
-
-
-class QCP_LIB_DECL QCPColorMapData
-{
-public:
-  QCPColorMapData(int keySize, int valueSize, const QCPRange &keyRange, const QCPRange &valueRange);
-  ~QCPColorMapData();
-  QCPColorMapData(const QCPColorMapData &other);
-  QCPColorMapData &operator=(const QCPColorMapData &other);
-  
-  // getters:
-  int keySize() const { return mKeySize; }
-  int valueSize() const { return mValueSize; }
-  QCPRange keyRange() const { return mKeyRange; }
-  QCPRange valueRange() const { return mValueRange; }
-  QCPRange dataBounds() const { return mDataBounds; }
-  double data(double key, double value);
-  double cell(int keyIndex, int valueIndex);
-  
-  // setters:
-  void setSize(int keySize, int valueSize);
-  void setKeySize(int keySize);
-  void setValueSize(int valueSize);
-  void setRange(const QCPRange &keyRange, const QCPRange &valueRange);
-  void setKeyRange(const QCPRange &keyRange);
-  void setValueRange(const QCPRange &valueRange);
-  void setData(double key, double value, double z);
-  void setCell(int keyIndex, int valueIndex, double z);
-  
-  // non-property methods:
-  void recalculateDataBounds();
-  void clear();
-  void fill(double z);
-  bool isEmpty() const { return mIsEmpty; }
-  void coordToCell(double key, double value, int *keyIndex, int *valueIndex) const;
-  void cellToCoord(int keyIndex, int valueIndex, double *key, double *value) const;
-  
-protected:
-  // property members:
-  int mKeySize, mValueSize;
-  QCPRange mKeyRange, mValueRange;
-  bool mIsEmpty;
-  // non-property members:
-  double *mData;
-  QCPRange mDataBounds;
-  bool mDataModified;
-  
-  friend class QCPColorMap;
-};
-
-
-class QCP_LIB_DECL QCPColorMap : public QCPAbstractPlottable
-{
-  Q_OBJECT
-  /// \cond INCLUDE_QPROPERTIES
-  Q_PROPERTY(QCPRange dataRange READ dataRange WRITE setDataRange NOTIFY dataRangeChanged)
-  Q_PROPERTY(QCPAxis::ScaleType dataScaleType READ dataScaleType WRITE setDataScaleType NOTIFY dataScaleTypeChanged)
-  Q_PROPERTY(QCPColorGradient gradient READ gradient WRITE setGradient NOTIFY gradientChanged)
-  Q_PROPERTY(bool interpolate READ interpolate WRITE setInterpolate)
-  Q_PROPERTY(bool tightBoundary READ tightBoundary WRITE setTightBoundary)
-  Q_PROPERTY(QCPColorScale* colorScale READ colorScale WRITE setColorScale)
-  /// \endcond
-public:
-  explicit QCPColorMap(QCPAxis *keyAxis, QCPAxis *valueAxis);
-  virtual ~QCPColorMap();
-  
-  // getters:
-  QCPColorMapData *data() const { return mMapData; }
-  QCPRange dataRange() const { return mDataRange; }
-  QCPAxis::ScaleType dataScaleType() const { return mDataScaleType; }
   bool interpolate() const { return mInterpolate; }
   bool tightBoundary() const { return mTightBoundary; }
   QCPColorGradient gradient() const { return mGradient; }
   QCPColorScale *colorScale() const { return mColorScale.data(); }
   
   // setters:
-  void setData(QCPColorMapData *data, bool copy=false);
+  void setType(QCPAxis::AxisType type);
   Q_SLOT void setDataRange(const QCPRange &dataRange);
   Q_SLOT void setDataScaleType(QCPAxis::ScaleType scaleType);
   Q_SLOT void setGradient(const QCPColorGradient &gradient);
@@ -2965,6 +2399,7 @@ signals:
   
 protected:
   // property members:
+  QCPAxis::AxisType mType;
   QCPRange mDataRange;
   QCPAxis::ScaleType mDataScaleType;
   QCPColorMapData *mMapData;
@@ -3269,8 +2704,7 @@ protected:
 
 class QCP_LIB_DECL QCPItemEllipse : public QCPAbstractItem
 {
-  Q_OBJECT
-  /// \cond INCLUDE_QPROPERTIES
+  Q_OBJECT  /// \cond INCLUDE_QPROPERTIES
   Q_PROPERTY(QPen pen READ pen WRITE setPen)
   Q_PROPERTY(QPen selectedPen READ selectedPen WRITE setSelectedPen)
   Q_PROPERTY(QBrush brush READ brush WRITE setBrush)
@@ -3516,6 +2950,5 @@ protected:
   // non-virtual methods:
   QPen mainPen() const;
 };
-
 #endif // QCUSTOMPLOT_H
 

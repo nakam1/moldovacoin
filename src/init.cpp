@@ -11,6 +11,9 @@
 #include "util.h"
 #include "ui_interface.h"
 #include "checkpoints.h"
+#include <map>
+#include <memory>
+#include <utility>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/filesystem/convenience.hpp>
@@ -24,6 +27,8 @@
 
 using namespace std;
 using namespace boost;
+#include <boost/filesystem.hpp>   // explicit use of boost::filesystem
+namespace filesystem = boost::filesystem;
 
 CWallet* pwalletMain;
 CClientUIInterface uiInterface;
@@ -544,7 +549,7 @@ bool AppInit2()
             return false;
     }
 
-    if (filesystem::exists(GetDataDir() / strWalletFileName))
+    if (boost::filesystem::exists(GetDataDir() / strWalletFileName))
     {
         CDBEnv::VerifyResult r = bitdb.Verify(strWalletFileName, CWalletDB::Recover);
         if (r == CDBEnv::RECOVER_OK)
@@ -840,13 +845,13 @@ bool AppInit2()
         exit(0);
     }
 
-    filesystem::path pathBootstrap = GetDataDir() / "bootstrap.dat";
-    if (filesystem::exists(pathBootstrap)) {
+    boost::filesystem::path pathBootstrap = GetDataDir() / "bootstrap.dat";
+    if (boost::filesystem::exists(pathBootstrap)) {
         uiInterface.InitMessage(_("Importing bootstrap blockchain data file.          "));
 
         FILE *file = fopen(pathBootstrap.string().c_str(), "rb");
         if (file) {
-            filesystem::path pathBootstrapOld = GetDataDir() / "bootstrap.dat.old";
+            boost::filesystem::path pathBootstrapOld = GetDataDir() / "bootstrap.dat.old";
             LoadExternalBlockFile(file);
             RenameOver(pathBootstrap, pathBootstrapOld);
         }

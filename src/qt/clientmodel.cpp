@@ -10,6 +10,8 @@
 
 #include <QDateTime>
 #include <QTimer>
+#include <boost/bind/placeholders.hpp>
+using namespace boost::placeholders;
 
 static const int64_t nClientStartupTime = GetTime();
 
